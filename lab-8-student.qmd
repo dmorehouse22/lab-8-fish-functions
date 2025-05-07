@@ -2,7 +2,6 @@
 title: Lab 8, Fish Functions
 author: Danny Morehouse
 format: 
-  html: default
   gfm: default
 embed-resources: true
 execute: 
