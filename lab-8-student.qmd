@@ -1,8 +1,26 @@
+---
+title: Lab 8, Fish Functions
+author: Danny Morehouse
+format: 
+  html: default
+  gfm: default
+embed-resources: true
+execute: 
+  echo: true
+  warning: false
+---
+
+
+
+
+
+
 The goal of this lab is learn more about exploring missing data and writing
 modular code.
 
 ```{r}
 #| label: setup
+#| include: false
 
 library(tidyverse)
 
