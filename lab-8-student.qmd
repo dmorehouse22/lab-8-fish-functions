@@ -1,0 +1,283 @@
+The goal of this lab is learn more about exploring missing data and writing
+modular code.
+
+```{r}
+#| label: setup
+
+library(tidyverse)
+
+fish_data <- read.csv("BlackfootFish.csv")
+```
+
+## The Data
+
+This lab's data concerns mark-recapture data on four species of trout from the
+Blackfoot River outside of Helena, Montana. These four species are
+**rainbow trout (RBT)**, **westslope cutthroat trout (WCT)**, **bull trout**,
+and **brown trout**.
+
+Mark-recapture is a common method used by ecologists to estimate a population's
+size when it is impossible to conduct a census (count every animal). This method
+works by *tagging* animals with a tracking device so that scientists can track
+their movement and presence.
+
+## Data Exploration
+
+The measurements of each captured fish were taken by a biologist on a raft in
+the river. The lack of a laboratory setting opens the door to the possibility of
+measurement errors.
+
+**1a. Let's look for missing values in the dataset. Output ONE table that answers BOTH of the following questions:**
+
++ **How many observations have missing values?**
++ **What variable(s) have missing values present?**
+
+::: callout-tip
+# You should use `across()`!
+:::
+
+```{r}
+#| label: find-missing-values
+# 1796 missing observations, all within 'weight'
+# Asked ChatGPT for help because the basic pipe wasn't producing the proper result. I was able to get the missing observations, but couldn't figure out how to return the missing_variables. Not only did it provide the recommendation to use the other pipe, but it suggested adding rowSums after across() to pair the 2 functions together
+
+fish_data %>%
+  summarize(missing_observations = sum(across(everything(), ~is.na(.)) %>% rowSums() > 0),
+            missing_variables = list(names(which(colSums(is.na(.)) > 0))))
+```
+
+
+
+**1b. Using `map_int()`, produce a nicely formatted table of the number of missing values for each variable in the `fish` data that displays the same information as 1a** 
+
+```{r}
+#| label: map-missing-values-of-fish
+# Searched map_int() function to see where to input the proper variables, used the same sum(is.na) entry from above
+# Knew I had to use the names from missing values, but didn't know what function to start with, ChatGPT provided assistance with the 'tibble' function
+
+missing_values <- map_int(fish_data, ~sum(is.na(.)))
+
+missing_values_mapping <- tibble(variable = names(missing_values),
+                               missing_count = missing_values)
+```
+
+
+**2. Create ONE thoughtful visualization that explores the frequency of missing values across the different years, sections, and trips.**
+
+```{r}
+#| label: visual-of-missing-values-over-time
+# Knew how to group the variables, but was extremely confused on how to make a visualization combining the 3 variables on one axis. I was comfortable making a boxplot, so I asked ChatGPT how to combine 3 variables on one axis - which returned interaction()
+# Once again, I apologize for the excessive use of AI assistance, i'm trying to use it only as a last ditch effort if I can't figure it out with my own experience
+
+new_fish_data <- fish_data |>
+  mutate(missing_count = rowSums(is.na(across(everything())))) #Make variable for missing data
+
+missing_visualization <- new_fish_data |>
+  group_by(year, section, trip) |> #Group by 3 variables
+  summarize(missing_values = sum(missing_count))
+
+
+missing_visualization |> 
+  ggplot(aes(x = interaction(year, section, trip), y = missing_values)) +
+  geom_boxplot(fill = "black") + 
+  labs(x = "Year, Section, Trip",
+       y = "Number of Missing Values",
+       title = "Missing Values of Fish Data Across Different Years, Sections & Trips") +
+  theme_light() + 
+  theme(axis.text.x = element_text(angle = 90, hjust = 1))
+```
+
+## Rescaling the Data
+
+If I wanted to rescale every quantitative variable in my dataset so that they
+only have values between 0 and 1, I could use this formula:
+
+</br>
+
+$$y_{scaled} = \frac{y_i - min\{y_1, y_2,..., y_n\}}{max\{y_1, y_2,..., y_n\} 
+- min\{y_1, y_2,..., y_n\}}$$
+
+</br>
+
+I might write the following `R` code to carry out the rescaling procedure for the `length` and `weight` columns of the `BlackfoorFish` data:
+
+```{r}
+#| echo: true
+#| eval: false
+
+fish <- fish |> 
+  mutate(length = (length - min(length, na.rm = TRUE)) / 
+           (max(length, na.rm = TRUE) - min(length, na.rm = TRUE)), 
+         weight = (weight - min(weight, na.rm = TRUE)) / 
+           (max(weight, na.rm = TRUE) - min(length, na.rm = TRUE)))
+```
+
+This process of duplicating an action multiple times can make it difficult to
+understand the intent of the process. *Additionally, it can make it very difficult to spot mistakes.*
+
+**3. What is the mistake I made in the above rescaling code?**
+
+You used the same thing over 3 times - should create a function!
+
+When you find yourself copy-pasting lines of code, it's time to write a
+function, instead!
+
+**4. Transform the repeated process above into a `rescale_01()` function. Your function should...**
+
++ **... take a single vector as input.**
++ **... return the rescaled vector.**
+
+```{r}
+#| label: write-rescale-function
+# Took the start of the rescale function from the W12 video project, not sure if my following code is correct. I got a response for the test code below but I'm not sure if it is correct.
+
+#rescale_01 <- function(x) {
+  #((x - min(x)) / (max(x) - min(x)))
+  #if(!is.numeric(x))
+    #stop()
+ # if (length(x) <= 1)
+    #stop()
+#}
+
+#Code before asking ChatGPT what was wrong
+
+rescale_01 <- function(x) {
+  if (!is.numeric(x)) {
+    stop("Input must be numeric.")
+  }
+  
+  if (length(x) <= 1) {
+    stop("Input must have more than one element.")
+  }
+  
+  # Remove NAs from the data when calculating min and max
+  min_val <- min(x, na.rm = TRUE)
+  max_val <- max(x, na.rm = TRUE)
+  
+  # Check if all values are NA
+  if (is.infinite(min_val) || is.infinite(max_val)) {
+    stop("All values in the input are NA.")
+  }
+  
+  # Rescale the input
+  scaled_x <- (x - min_val) / (max_val - min_val)
+  
+  return(scaled_x)
+}
+
+# AI recommended adding the NA portions of the function to acknowledge the error message I was seeing...
+  # Warning: no non-missing arguments to min; returning Inf[1] Inf
+  # Warning: no non-missing arguments to max; returning -Inf[1] -Inf
+
+```
+
+::: callout-tip
+# Efficiency 
+
+Think about the efficiency of the function you wrote. Are you calling the
+**same** function multiple times? You might want to look into the `range()` 
+function. 
+:::
+
+**5. Let's incorporate some input validation into your function. Modify your previous code so that the function stops if ...**
+
++ **... the input vector is not numeric.**
++ **... the length of the input vector is not greater than 1.**
+
+::: callout-tip
+# Modify Previous Code
+
+Do not create a new code chunk here -- simply add these stops to your function
+above!
+:::
+
+## Test Your Function
+
+**6. Run the code below to test your function. Verify that the maximum of your rescaled vector is 1 and the minimum is 0!**
+
+```{r}
+#| label: verify-rescale-function
+# Asked ChatGPT for assistance when presented with an error message (listed above in function code)
+
+x <- c(1:25, NA)
+
+rescaled <- rescale_01(x)
+min(rescaled, na.rm = TRUE)
+max(rescaled, na.rm = TRUE)
+```
+
+Next, let's test the function on the `length` column of the `BlackfootFish` data.
+
+**7. The code below makes a histogram of the original values of `length`. Add a plot of the rescaled values of `length`. Output your plots side-by-side, so the reader can confirm the only aspect that has changed is the scale.**
+
+::: callout-warning
+This will require you to call your `rescale_01()` function within a `mutate()`
+statement in order to create a `length_scaled` variable.
+:::
+
+```{r}
+#| label: compare-original-with-rescaled-lengths
+#| layout-ncol: 2
+# Need to modify the rescale function, won't produce a figure
+
+fish_data |>  
+  ggplot(aes(x = length)) + 
+  geom_histogram(binwidth = 45) +
+  labs(x = "Original Values of Fish Length (mm)",
+       y = "Count") +
+  scale_y_continuous(limits = c(0,4000))
+
+rescaled <- fish_data |>
+  mutate(length_scaled = rescale_01(length))
+
+rescaled |>
+  ggplot(aes(x = length_scaled)) + 
+  geom_histogram() +
+  labs(x = "Scaled Values of Fish Length (mm)",
+       y = "Count")
+
+
+```
+
+::: callout-tip
+1. Set the y-axis limits for both plots to go from 0 to 4000 to allow for direct comparison across plots.
+
+2. Pay attention to `binwidth`!
+
+3. Use a Quarto code chunk option to put the plots side-by-side.
+:::
+
+## Challenge: Use Variables within a Dataset
+
+Suppose you would like for your `rescale()` function to perform operations on a **variable within a dataset**. Ideally, your function would take in a data
+frame and a variable name as inputs and return a data frame where the variable
+has been rescaled.
+
+**8. Create a `rescale_column()` function that accepts two arguments:**
+
++ **a dataframe**
++ **the name(s) of the variable(s) to be rescaled**
+
+**The body of the function should call the original `rescale_01()` function you wrote previously. Your solution MUST use one of the `rlang` options from class.**
+
+::: callout-tip
+If you are struggling with this task, I recommend looking back over the 
+[data frame functions](https://r4ds.hadley.nz/functions.html#data-frame-functions)
+section of R for Data Science!
+:::
+
+```{r}
+#| label: rescale-data-frame-function
+
+```
+
+**9. Use your `rescale_column()` function to rescale *both* the `length` and `weight` columns.**
+
+::: callout-warning
+I expect that you carry out this process by calling the `rescale_column()` function only ONE time!
+:::
+
+```{r}
+#| label: rescale-two-columns
+
+```
